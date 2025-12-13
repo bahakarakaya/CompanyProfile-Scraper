@@ -1,7 +1,6 @@
 import scrapy
 from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
 from trustpilot_scraper.items import TrustpilotScraperItem
-import re
 import logging
 
 
@@ -19,6 +18,7 @@ class TrustpilotSpider(scrapy.Spider):
         self.base_url = "https://www.trustpilot.com"
 
         self.start_urls = [f"{self.base_url}/categories?country={self.country_code}"]
+        self.logger.info(f"Initialized spider for country: {self.country_code}")
 
     
     def add_country_param(self, url):
@@ -40,21 +40,24 @@ class TrustpilotSpider(scrapy.Spider):
 
     def parse(self, response):
         """Main and subcategory extraction from the categories page."""
+        self.logger.info(f"Parsing categories page: {response.url}")
 
         categories = response.xpath('//div[contains(@class, "CDS_Card")]')
-        
-        category_names = [
-            cat.xpath('.//h2/text()').get() 
-            for cat in categories
-        ]
-        category_names = [
-            name.replace("&", "_").replace(",", "_").replace(" ", "").lower() 
-            for name in category_names
-        ]
+        self.logger.debug(f"Found {len(categories)} categories")
+
+        category_names = []
+        for idx, cat in enumerate(categories):
+            name = cat.xpath('.//h2/text()').get()
+            if name is None:
+                raise ValueError(f"Category at index {idx} has no <h2> text. Fix the XPath or HTML structure.")
+            
+            normalized = name.replace("&", "_").replace(",", "_").replace(" ", "").lower()
+            category_names.append(normalized)
 
         for cat_idx, cat_selector in enumerate(categories[:2]):
             subcategory_links = cat_selector.xpath('./ul//a[contains(@href, "/categories/")]/@href')
             cat_name = category_names[cat_idx]
+            self.logger.info(f"Processing category '{cat_name}' with {len(subcategory_links)} subcategories")
 
             for subcat_link in subcategory_links:
                 subcat_link = subcat_link.get()
@@ -65,8 +68,10 @@ class TrustpilotSpider(scrapy.Spider):
 
     def parse_category_pagination(self, response):
         """Pagination for category and company pages."""
+        self.logger.debug(f"Parsing category pagination: {response.url}")
 
         company_links = response.xpath('//a[contains(@href, "/review")]/@href').getall()
+        self.logger.info(f"Found {len(company_links)} company links on page")
 
         try:
             path = urlparse(response.url).path  # example: /categories/furniture
@@ -82,6 +87,7 @@ class TrustpilotSpider(scrapy.Spider):
         
         next_page = response.xpath('//a[@rel="next"]/@href').get()
         if next_page:
+            self.logger.debug(f"Following next page: {next_page}")
             next_page = response.urljoin(next_page)
             next_page = self.add_country_param(next_page)
             yield response.follow(next_page, callback=self.parse_category_pagination, meta={'category_name': response.meta.get('category_name'), 'subcategory': current_subcategory})
@@ -94,6 +100,8 @@ class TrustpilotSpider(scrapy.Spider):
         item = TrustpilotScraperItem()
         try:
             item['company_name'] = response.xpath('//h1//span[contains(@class, "title_displayName")]/text()').get().strip()
+            self.logger.info(f"Extracted company: {item['company_name']}")
+
             item['category'] = response.meta.get('category_name')
             item['subcategory'] = response.meta.get('subcategory')
 
@@ -144,7 +152,7 @@ class TrustpilotSpider(scrapy.Spider):
             item['trustpilot_url'] = response.url
             item['country'] = self.country_code
         except Exception as e:
-            print(f"Error parsing company profile: {e}")
+            self.logger.error(f"Error parsing company profile {response.url}: {e}", exc_info=True)
             raise
 
         yield item
