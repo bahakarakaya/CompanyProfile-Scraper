@@ -8,17 +8,22 @@ class TrustpilotSpider(scrapy.Spider):
     name = "trustpilot"
     allowed_domains = ["www.trustpilot.com"]
 
-    def __init__(self, country: str = "GB", *args, **kwargs):
+    def __init__(self, country: str = "GB", proxy: str = None, *args, **kwargs):
         """
         example: scrapy crawl trustpilot -a country=DE -o output_de.json
+        example with proxy: scrapy crawl trustpilot -a country=DE -a proxy=http://user:pass@proxy:port -o output_de.json
         """
 
         super(TrustpilotSpider, self).__init__(*args, **kwargs)
         self.country_code = country.upper()
         self.base_url = "https://www.trustpilot.com"
+        self.proxy = proxy
 
         self.start_urls = [f"{self.base_url}/categories?country={self.country_code}"]
         self.logger.info(f"Initialized spider for country: {self.country_code}")
+        
+        if self.proxy:
+            self.logger.info(f"Using proxy: {self.proxy}")
 
     
     def add_country_param(self, url):
