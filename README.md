@@ -233,9 +233,9 @@ You can modify the spider behavior by editing `trustpilot_scraper/spiders/trustp
 - The website structure may have changed
 - Update XPath selectors in `trustpilot.py`
 
-## License
+## 📝 License
 
---
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
